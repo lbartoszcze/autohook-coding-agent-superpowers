@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "mcp__ide__executeCode",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'BLOCKED: Inline code execution is not allowed' >&2 && exit 2"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/pre_bash.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "INPUT=$(cat); if echo \"$INPUT\" | grep -qiE '(/tmp/|/var/folders/)'; then echo 'BLOCKED: Reading from tmp directory is not allowed' >&2 && exit 2; fi"
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/pre_write_edit.sh"
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/check_email_infra.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "INPUT=$(cat); if echo \"$INPUT\" | grep -qiE '(/tmp/|/var/folders/)'; then echo 'BLOCKED: Editing notebooks in tmp directory is not allowed' >&2 && exit 2; fi"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "INPUT=$(cat)\nSTOP_ACTIVE=$(echo \"$INPUT\" | jq -r '.stop_hook_active' 2>/dev/null)\nif [ \"$STOP_ACTIVE\" = \"true\" ]; then exit 0; fi\nMSG=$(echo \"$INPUT\" | jq -r '.last_assistant_message' 2>/dev/null)\nif echo \"$MSG\" | grep -qiE '\\bmanual(ly)?\\b|\\bby hand\\b|\\bsimplif(y|ied|ier)\\b|\\bsimpler approach\\b|\\blet me try a simpler\\b|\\bdo it yourself\\b|\\bcreate.*(account|it).*(yourself|by hand)\\b|\\beasier.*(just|to).*manual\\b'; then\n  echo '{\"decision\":\"block\",\"reason\":\"BLOCKED: You suggested a manual/simplified solution. Everything must be fully automated. No manual steps, no simplifying. Rethink and provide a fully automated solution.\"}'\n  exit 0\nfi\nif echo \"$MSG\" | grep -qiE '\\blikely\\b|\\bknown limitation\\b|\\bprobably\\b|\\bmaybe\\b|\\bmay be\\b|\\bmight be\\b|\\bcould be\\b|\\bpossibly\\b|\\bperhaps\\b|\\bi think\\b|\\bi suspect\\b|\\bmy guess\\b'; then\n  echo '{\"decision\":\"block\",\"reason\":\"BLOCKED: Do not speculate. You used a weasel word (likely, probably, might, etc). Investigate the actual code/data and state what IS happening, not what might be.\"}'\n  exit 0\nfi\nif echo \"$MSG\" | grep -qiE '\\bcool[- ]?down\\b|\\bcools? (off|down)\\b|\\bcooling (off|down)\\b|\\bfresh eyes\\b|\\brested brain\\b|\\bneed (a |some )?rest\\b|\\bsleep on (it|this)\\b|\\btry (again )?(tomorrow|later)\\b|\\bcome back (tomorrow|later|in (a|the) morning)\\b|\\bwait (it )?out\\b|\\bpool (is|was|gets|got) burn(t|ed)\\b|\\bburnt (pool|ip)\\b|\\bips? (will |should |might )?(cool|age|decay|reset|clear|unburn)\\b|\\brate[- ]?limit.*\\b(will|should|might|may) (reset|clear|expire|decay)\\b|\\btake a break\\b|\\bcall it a day\\b|\\bpick (this|it) up tomorrow\\b'; then\n  echo '{\"decision\":\"block\",\"reason\":\"BLOCKED: Do not suggest waiting, cooling off, retrying later, taking a break, or claim that IPs/pools/rate-limits will reset or cool down. If a flow fails, diagnose with evidence or say \\\"I do not know\\\". Never invent recovery mechanisms without reverse-engineering data.\"}'\n  exit 0\nfi\nexit 0"
+          },
+          {
+            "type": "command",
+            "command": "python3 $HOME/.claude/hooks/check_time_estimates.py"
+          },
+          {
+            "type": "command",
+            "command": "python3 $HOME/.claude/hooks/check_stop_asking.py"
+          }
+        ]
+      }
+    ]
+  },
+  "enabledPlugins": {
+    "clangd-lsp@claude-plugins-official": true,
+    "rust-analyzer-lsp@claude-plugins-official": true
+  },
+  "alwaysThinkingEnabled": true,
+  "effortLevel": "high",
+  "skipDangerousModePermissionPrompt": true,
+  "mcpServers": {
+    "puppeteer-stealth": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "puppeteer-real-browser-mcp-server@latest"
+      ]
+    },
+    "stripe": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@stripe/mcp",
+        "--tools=all",
+        "--api-key=<YOUR_STRIPE_API_KEY>"
+      ]
+    },
+    "figma": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "figma-developer-mcp@latest",
+        "--figma-api-key",
+        "<YOUR_FIGMA_API_KEY>",
+        "--stdio"
+      ]
+    },
+    "GoogleAds": {
+      "command": "<PATH_TO_GOOGLE_ADS_MCP_PYTHON>",
+      "args": [
+        "<PATH_TO_GOOGLE_ADS_RUN_STDIO_PY>"
+      ],
+      "env": {
+        "GOOGLE_ADS_CREDENTIALS": "<PATH_TO_google-ads.yaml>"
+      },
+      "timeout": 60000
+    }
+  },
+  "theme": "light"
+}

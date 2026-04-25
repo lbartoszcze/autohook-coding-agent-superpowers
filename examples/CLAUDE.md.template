@@ -1,0 +1,191 @@
+# Project CLAUDE.md template
+
+# This is a sanitized template based on the CLAUDE.md I keep in the root of
+# my Wisent backends repo. The literal credentials and internal infrastructure
+# URLs have been replaced with placeholders. The point is to show the *patterns*
+# I use, not to ship credentials.
+#
+# Pick the sections that apply to your project, replace placeholders with your
+# own values, and delete the rest.
+
+## Credentials
+
+# Pasting credentials in CLAUDE.md is convenient but DANGEROUS - anything in
+# this file is loaded into the model's context every turn. Anyone reviewing your
+# session transcripts will see the keys, and the file usually ends up checked
+# into the repo. Prefer environment variables, a 1Password CLI shim, or a
+# .env file that is gitignored. Only paste values here if you accept that
+# they are effectively published.
+
+AWS_ACCESS_KEY_ID: <YOUR_AWS_ACCESS_KEY_ID>
+AWS_SECRET_ACCESS_KEY: <YOUR_AWS_SECRET_ACCESS_KEY>
+
+GitHub PAT (for checking Actions): <YOUR_GITHUB_PAT>
+PyPI token (for releases): <YOUR_PYPI_TOKEN>
+Hugging Face token (for gated models): <YOUR_HF_TOKEN>
+
+## Hard rules
+
+Do not create new test files. You are prohibited from creating new test files
+unless actually requested.
+
+You are banned from using the sleep command. NO SLEEP COMMAND. Use `nohup` for
+long-running jobs and inspect logs.
+
+You are not permitted to simplify anything. Do not perform any simple tests.
+In case of errors, resolve them. Do not use any backup-substitute paths or
+mocks. There should be no hardcoded values. No timeouts. There should be
+clear conditions for failure. If there is no failure, continue the process.
+
+## Deployment workflow
+
+This repository is deployed automatically on every commit. The deployment
+rules live in `<YOUR_DEPLOYMENT_CONFIG_PATH>` (e.g., `.github/workflows/deploy.yml`).
+You can inspect everything happening on the instance. Do not fix things
+manually for one instance. Change the deployment script or AMI/image so all
+instances pick up the fix. Do not say success until you have:
+
+  1. Triggered a new deployment.
+  2. Monitored the deployment until it finishes.
+  3. Inspected the new instance.
+  4. Reported back that the change works on the freshly deployed instance.
+
+## Diagnosing errors
+
+If there are errors, never guess. Do not say "it is likely". Add logs to
+determine THE EXACT CAUSE. If a server is failing, go in and check what is
+going wrong. You have the tools to inspect ALL of the code AND ALL of the
+logs.
+
+## Repository layout (example - replace with your own)
+
+There are two folders here: one is the source for the `<YOUR_PACKAGE_NAME>`
+package, the other is the backend that consumes it. The package can be
+published to PyPI with `<YOUR_PYPI_TOKEN>`. Use `<YOUR_DEBUG_MODEL>` (e.g.
+`meta-llama/Llama-3.2-1B-Instruct`) when debugging the package locally. The
+backend serves the package's functionality.
+
+You are working on this repo locally. Anything pushed to git auto-deploys to
+the server. Do not run files locally that are meant to run on the server.
+
+For the inference backend the production model is `<YOUR_INFERENCE_MODEL>`
+(e.g. a quantized GGUF served via vLLM). See `docker-compose.inference.yml`
+for the full server config. Nothing should be gated.
+
+## Infrastructure shape (example - replace with your own)
+
+We run two instance types on `<YOUR_INSTANCE_FAMILY>` instances (e.g.
+`g6e.xlarge`):
+
+  - Training instances run training workers (Celery).
+  - Inference instances run inference workers (vLLM).
+
+Each instance type has a green and a blue autoscaling group for seamless
+GitHub Actions deploys. Each instance has `<YOUR_GPU_GB>` GB of GPU memory.
+There are `<N>` inference workers and `<M>` training workers per instance.
+Each instance type scales on demand.
+
+The autoscaling groups sit behind a target group routed via `<YOUR_DOMAIN>`
+to the right instance. Because instances cycle, hardcoding instance URLs is
+a mistake - always go through the load balancer.
+
+## Benchmark fixing rules
+
+When fixing benchmarks, use the ALREADY CREATED LIST OF FAILURES. Fix them
+ONE BY ONE manually. ALL of them can be fixed. Do not say a benchmark does
+not exist in lm-eval-harness - it might exist under a different name. Check
+the lm-eval-harness tasks README. Do not use backup-substitute paths. Do not
+guess extractors or evaluators - use the same evaluator the benchmark uses.
+Do not default to log-likelihood evaluation. Do not look at any other
+benchmark before fully fixing one. Check both extraction and evaluation.
+Track how you generate positive and negative responses for contrastive
+pairs. Read the dedicated README if something is unclear. Trust remote code
+works fine in lm-eval-harness - read through the codebase if it is not
+working for you. DO NOT EDIT lm-eval-harness CODE.
+
+## Running individual commands
+
+For running individual `<YOUR_PACKAGE>` commands, use the `<YOUR_RUN_SCRIPT>`
+script (e.g. `run_on_aws.sh`). For any job, use this script. If you change
+default values (e.g. running on CPU, reducing trial count), explain why. If
+the reason is "this is a simple test", STOP - run with proper defaults.
+
+Do not run `tail` commands (currently broken in this environment). For local
+runs, use MPS instead of CPU on Apple Silicon.
+
+## Forbidden commands
+
+These commands are absolutely forbidden:
+
+  - `pkill -f "<YOUR_RUN_SCRIPT>"` - kills long-running jobs.
+  - `pkill <YOUR_RUN_SCRIPT>`
+  - `killall <YOUR_RUN_SCRIPT>`
+  - `kill <PID>` for any PID related to `<YOUR_RUN_SCRIPT>`.
+  - Any command that would terminate `<YOUR_RUN_SCRIPT>` processes.
+
+Multiple `<YOUR_RUN_SCRIPT>` jobs run in parallel intentionally. NEVER kill
+them.
+
+## Background job discipline
+
+Do not poll or repeatedly check log files in a loop. Run the background job,
+report the log file location, and wait for the user to ask for updates.
+
+When running long background jobs:
+
+  - Start with `nohup`.
+  - Tell the user the log file path.
+  - STOP and wait for the user to ask for status.
+  - Do not check status more than once per user message.
+
+BANNED ANTI-PATTERN: Repeatedly calling `wc -l` + Read in sequence to
+"monitor" a job. This wastes tokens and can cause Claude Code to hang.
+
+Each process run through `<YOUR_RUN_SCRIPT>` is going to save logs to S3 (or
+your equivalent log sink).
+
+## Never terminate working processes
+
+  - NEVER terminate a cloud instance or process just because it appears slow.
+  - If a process is using CPU/GPU and not showing errors, IT IS WORKING.
+  - Long-running processes are NORMAL for large models - let them run.
+  - If you think something is stuck, ASK THE USER before taking any action.
+  - "No output" or "diagnostics spam" does NOT mean stuck.
+  - NEVER create manual workarounds or "simpler tests" to bypass slow
+    processes.
+  - NEVER present results from arbitrary/guessed parameters as meaningful
+    optimization results.
+  - The only valid reasons to terminate: explicit user request, actual error
+    messages, or instance crash.
+
+## No inline scripts
+
+  - NEVER use inline Python scripts via the dash-c form. Forbidden.
+  - NEVER write throwaway code in terminal commands.
+  - NEVER pass arbitrary parameters to "make it faster" or "for testing".
+  - NEVER hardcode limits, layer ranges, or other parameters unless
+    explicitly requested.
+  - If a CLI command exists, USE IT.
+  - If you need to test code, write a proper script file or use the existing
+    CLI infrastructure.
+  - Inline scripts lead to: arbitrary parameters, untraceable bugs, wasted
+    debugging time.
+
+## Cloud instance management
+
+  - NEVER manually launch instances with `aws ec2 run-instances` or the
+    equivalent on your provider.
+  - NEVER run SSM commands manually to start jobs.
+  - ALWAYS use `<YOUR_RUN_SCRIPT>`.
+  - NEVER use timeouts on long-running commands. Use `nohup`.
+  - If `<YOUR_RUN_SCRIPT>` times out locally, the job may still be running on
+    the cloud instance - check the instance before doing anything else.
+  - For long-running extraction jobs, run `<YOUR_RUN_SCRIPT>` in background:
+    `nohup ./<YOUR_RUN_SCRIPT> ... > job.log 2>&1 &`
+  - The script handles: instance launch, setup, job execution, output
+    collection, and termination.
+
+## Model preferences (example - replace with your own)
+
+NEVER use `<DEPRECATED_MODEL>`. Always use `<PREFERRED_MODEL>` (e.g.
+`Qwen/Qwen3-4B`, `Qwen/Qwen3-4B-Instruct-2507`).
