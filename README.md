@@ -11,6 +11,7 @@ project's shared modules) and will need adjustment before they make sense in you
 
 ```
 .
+├── install.sh                        # One-shot installer; see "Installing" below
 ├── settings.json                     # ~/.claude/settings.json — wires the hooks
 ├── hooks/
 │   ├── pre_bash.sh                   # PreToolUse:Bash — block inline scripts, dangerous patterns
@@ -110,23 +111,39 @@ why this file needs to exist, it probably doesn't.
 
 ## Installing
 
-This repo is **not** a package. To use:
+One-liner:
+
+```bash
+git clone https://github.com/lbartoszcze/claude-code-config && \
+  cd claude-code-config && \
+  ./install.sh
+```
+
+`install.sh` copies `settings.json` and the hook scripts into `~/.claude/`, `chmod +x`s the hooks, seeds `~/.claude/file_justifications.json` with `{}` if missing, and touches `~/.claude/auto_rules.log`. Any pre-existing `~/.claude/settings.json` is backed up to `settings.json.bak.<timestamp>` so you can diff and merge any local changes by hand. Re-running is safe — hook files are overwritten in place; everything else is idempotent.
+
+Prerequisites: `jq`, `curl`, `python3`, `awk`, `sed`. The installer aborts with a clear error if any are missing.
+
+### Post-install
+
+1. **Replace placeholders in `~/.claude/settings.json`.** The `mcpServers` block ships with `<YOUR_STRIPE_API_KEY>`, `<YOUR_FIGMA_API_KEY>`, etc. Fill them in or delete the block entirely.
+2. **Set `MODEL_ROUTER_URL`** in your shell rc if you want `detect_frustration.sh` to draft auto-rules. The endpoint must be OpenAI-compatible (`/v1/chat/completions`):
+   ```bash
+   export MODEL_ROUTER_URL=https://your-router/v1
+   ```
+3. **Drop the `CLAUDE.md` template into a project.** Copy `examples/CLAUDE.md.template` to your project root, replace the `<YOUR_*>` placeholders, and rename it `CLAUDE.md`.
+4. **Audit auto-applied rules** with `cat ~/.claude/auto_rules.log`. Revert by editing the target file (`hooks/check_stop_asking.py`, `hooks/check_time_estimates.py`, or your project `CLAUDE.md`).
+
+### Manual install
+
+If you want to copy individual pieces without running the installer:
 
 ```bash
 cp settings.json ~/.claude/settings.json
 mkdir -p ~/.claude/hooks
-cp hooks/*.sh ~/.claude/hooks/
-cp hooks/*.py ~/.claude/hooks/
+cp hooks/*.sh hooks/*.py ~/.claude/hooks/
 chmod +x ~/.claude/hooks/*.sh ~/.claude/hooks/*.py
-```
-
-Replace the `<YOUR_*>` placeholders in `settings.json` with your real MCP server keys, or delete
-the `mcpServers` block if you don't use them.
-
-You'll also want to seed `~/.claude/file_justifications.json`:
-
-```bash
-echo '{}' > ~/.claude/file_justifications.json
+echo '{}' > ~/.claude/file_justifications.json    # only if missing
+touch ~/.claude/auto_rules.log
 ```
 
 ## Secret rotation checklist
