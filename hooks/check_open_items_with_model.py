@@ -1,41 +1,38 @@
 #!/usr/bin/env python3
-"""Stop hook (model-gated). Reads the assistant's last message and asks a
-small fast model — via Wisent's OpenAI-compatible router — whether the
-assistant just enumerated work it could have done in the same turn but
-stopped instead.
+"""Stop hook (model-gated). Reads the assistant's last message and asks
+the local Claude Code CLI (`claude -p`) whether the assistant just
+enumerated work it could have done in the same turn but stopped instead.
 
 Runs AFTER the regex hooks (check_stop_asking.py, check_time_estimates.py).
 Catches paraphrased premature-stops the regex layer can't anticipate.
 
-Auth: routes through MODEL_ROUTER_URL (the Wisent router exposes an
-OpenAI-compatible /v1/chat/completions endpoint and dispatches to the
-configured backend). MODEL_ROUTER_API_KEY is sent as Bearer auth when set.
+Auth: shells out to `claude -p`, which uses whatever auth the local
+Claude Code install already has -- no router or external API needed.
 
 Failure mode:
-  - any network / parse / timeout error → log to stderr and exit 0.
-  - never block on infrastructure issues; only block when the model
-    explicitly classifies the message as a premature stop.
+  - any subprocess / parse error -> exit 0 (never break the gate on
+    infrastructure issues; only block when the model explicitly says
+    BLOCK).
 
 Skips when:
   - stop_hook_active = true (re-entry from a prior block).
   - message is shorter than 200 chars (trivial answers).
   - CHECK_OPEN_ITEMS_MODEL_DISABLED env var is set to "1".
-  - MODEL_ROUTER_URL is not set.
+  - CHECK_OPEN_ITEMS_ACTIVE env var is set to "1" (anti-recursion --
+    we are inside a `claude -p` call this hook spawned).
+  - `claude` CLI is not on PATH.
 """
 from __future__ import annotations
 
 import json
 import os
+import shutil
+import subprocess
 import sys
-import urllib.request
-import urllib.error
-import http.client
 
 
-MODEL_NAME = "haiku"  # router maps this to the configured haiku-tier backend
 MAX_MSG_CHARS = 6000  # truncate longer messages to last N chars
 MIN_MSG_CHARS = 200   # don't bother analyzing very short replies
-TIMEOUT_SEC = 12      # cap network wait — never hang the turn
 
 PROMPT = """You are a strict gate that decides whether an AI assistant just stopped its turn prematurely.
 
@@ -67,41 +64,46 @@ def log(s: str) -> None:
     print(s, file=sys.stderr)
 
 
-def call_router(router_url: str, prompt: str) -> str | None:
-    body = json.dumps({
-        "model": MODEL_NAME,
-        "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": 200,
-    }).encode("utf-8")
-    headers = {"content-type": "application/json"}
-    bearer = os.environ.get("MODEL_ROUTER_API_KEY")
-    if bearer:
-        headers["authorization"] = f"Bearer {bearer}"
-    url = router_url.rstrip("/") + "/v1/chat/completions"
-    req = urllib.request.Request(url, data=body, headers=headers, method="POST")
+def call_claude(prompt: str) -> str | None:
+    """Invoke `claude -p` with the prompt. Sets CHECK_OPEN_ITEMS_ACTIVE=1
+    in the child env so the child Claude session's own Stop hooks short-
+    circuit when this one fires on the verdict response."""
+    env = os.environ.copy()
+    env["CHECK_OPEN_ITEMS_ACTIVE"] = "1"
     try:
-        with urllib.request.urlopen(req, timeout=TIMEOUT_SEC) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-        return data.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
-    except (urllib.error.URLError, http.client.HTTPException, json.JSONDecodeError, OSError) as e:
-        log(f"check_open_items_with_model: router call failed: {e}")
+        proc = subprocess.run(
+            ["claude", "-p", prompt],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+    except (FileNotFoundError, OSError) as e:
+        log(f"check_open_items_with_model: claude -p failed: {e}")
         return None
+    if proc.returncode != 0:
+        log(f"check_open_items_with_model: claude -p rc={proc.returncode}")
+        return None
+    return (proc.stdout or "").strip() or None
 
 
 def classify(message: str) -> str | None:
     """Returns the model's verdict text (starting with PASS or BLOCK:) or
-    None if no router was reachable."""
+    None if claude was not reachable."""
     truncated = message if len(message) <= MAX_MSG_CHARS else message[-MAX_MSG_CHARS:]
     prompt = PROMPT.format(message=truncated)
 
-    router_url = os.environ.get("MODEL_ROUTER_URL")
-    if not router_url:
+    if shutil.which("claude") is None:
         return None
-    return call_router(router_url, prompt)
+    return call_claude(prompt)
 
 
 def main() -> int:
     if os.environ.get("CHECK_OPEN_ITEMS_MODEL_DISABLED") == "1":
+        return 0
+    if os.environ.get("CHECK_OPEN_ITEMS_ACTIVE") == "1":
+        # We are inside a child claude -p call spawned by this hook.
+        # Don't recurse; a verdict response should never re-trigger the
+        # same gate.
         return 0
 
     try:
