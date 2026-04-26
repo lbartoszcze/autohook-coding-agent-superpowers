@@ -96,6 +96,33 @@ STOP_PATTERNS = [
     r"(commit|change|pr|pull\s+request|step|task|release|phase|chunk|piece|unit)s?\b",
     # "Let me know when to" — deferral via explicit "tell me"
     r"\blet\s+me\s+know\s+when\s+to\b",
+    # === Describe-the-gap-but-don't-fill-it ===
+    # The assistant identifies missing/unfinished work, declares it's not
+    # done, or punts to a future redesign — without actually doing the
+    # work. Different failure mode from asking-style or self-pause.
+    # "I haven't implemented it yet" / "I have not done that"
+    r"\bi\s+(haven'?t|have\s+not)\s+(yet\s+)?"
+    r"(implemented|done|fixed|built|written|wired|added|finished|started|tackled|"
+    r"addressed|made|created|rewritten|replaced|migrated|hooked\s+up|landed|coded|"
+    r"set\s+(it|that|this|them)?\s*up)\b",
+    # "is what should replace it" / "is what needs to land"
+    r"\bis\s+what\s+(should|needs?\s+to|must)\s+"
+    r"(replace|come|be|happen|land|ship|fix|resolve|address|do)\b",
+    # "should be implemented" / "needs to be done" / "must be replaced"
+    r"\b(should|needs?\s+to|must)\s+be\s+"
+    r"(implemented|done|fixed|built|written|wired|added|finished|hooked\s+up|"
+    r"landed|replaced|migrated|coded|tackled|rewritten|refactored|addressed)\b",
+    # "the X redesign is what should..." / "the migration that needs to..."
+    r"\b(redesign|refactor|rewrite|migration|implementation|fix|change|cleanup)"
+    r"\s+(is|that)\s+(what\s+)?(should|needs\s+to|must)\b",
+    # "today the system is exactly the wrong thing you flagged"
+    r"\b(today|currently|right\s+now|as\s+of\s+now)\s+"
+    r"(is|does|works|behaves|operates)\s+exactly\s+(like|the|how|what|that)\b",
+    # "still <verb>s the broken thing" — acknowledging unfinished state
+    r"\bstill\s+(uses|relies\s+on|behaves|works|treats|hits|calls|reads|writes|"
+    r"triggers|runs|fires|defaults|breaks|misses|ignores|skips)\s+(the\s+|a\s+)?"
+    r"(broken|wrong|old|original|previous|deprecated|stale|legacy|flawed|"
+    r"outdated)\b",
 ]
 
 COMPILED = [re.compile(p, flags=re.IGNORECASE | re.MULTILINE)
