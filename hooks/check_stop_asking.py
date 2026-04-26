@@ -135,11 +135,7 @@ def main() -> int:
         "BLOCKED: You stopped to ask the user what to do next instead of continuing. "
         "Flagged phrase(s): "
         + "; ".join(hits[:3])
-        + ". Pick the highest-value next task yourself and execute it. "
-        "Only stop when the work is genuinely complete or when the next step "
-        "requires information you cannot obtain (secrets, credentials, a "
-        "decision only the user can make, or an action that affects something "
-        "outside the local filesystem and must be explicitly authorized)."
+        + ". Pick the highest-value next task yourself and execute it."
     )
     print(json.dumps({"decision": "block", "reason": reason}))
     return 0
