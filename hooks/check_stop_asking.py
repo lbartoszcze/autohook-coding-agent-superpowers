@@ -167,10 +167,25 @@ COMPILED = [re.compile(p, flags=re.IGNORECASE | re.MULTILINE)
             for p in STOP_PATTERNS]
 
 
+def strip_code(text: str) -> str:
+    """Remove fenced code blocks and inline code spans from the message
+    before running the deflection patterns. Citing a pattern in
+    backticks (e.g. `"continuing on"`) or showing it in a fenced block
+    is meta-discussion, not a deflection. Without this, the hook fires
+    on its own examples whenever the assistant edits or explains the
+    hook itself."""
+    # Strip ```...``` fenced blocks first (multi-line, non-greedy).
+    text = re.sub(r"```[\s\S]*?```", "", text)
+    # Strip `...` inline code spans (single-line, non-greedy).
+    text = re.sub(r"`[^`\n]+`", "", text)
+    return text
+
+
 def find_hits(tail: str) -> list[str]:
+    cleaned = strip_code(tail)
     hits: list[str] = []
     for regex in COMPILED:
-        for match in regex.finditer(tail):
+        for match in regex.finditer(cleaned):
             hits.append(match.group(0).strip())
     seen: dict[str, None] = {}
     for h in hits:
