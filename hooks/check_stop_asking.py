@@ -123,6 +123,44 @@ STOP_PATTERNS = [
     r"triggers|runs|fires|defaults|breaks|misses|ignores|skips)\s+(the\s+|a\s+)?"
     r"(broken|wrong|old|original|previous|deprecated|stale|legacy|flawed|"
     r"outdated)\b",
+    # === Status-report-then-stop ===
+    # Long agent turns that end with a "what's done / what's left" recap
+    # and stop, even when the listed-as-left work is within the agent's
+    # capability. These complement the asking-style and self-pause sets.
+    # Noun-first remaining: "problems remaining", "tasks remaining",
+    # "issues outstanding", "bugs open", "tests failing".
+    r"\b(problems?|issues?|bugs?|failures?|gaps?|tasks?|items?|tests?|fixes?|"
+    r"changes?|trajectories|repos?|files?|tickets?|defects?)\s+"
+    r"(remain|remains|remaining|outstanding|pending|left|to\s+go|"
+    r"unfinished|open|still\s+open|still\s+failing)\b",
+    # Adjective-first form expanded with new noun set.
+    r"\b(remaining|outstanding|pending|leftover|unfinished|open|still)\s+"
+    r"(problems?|issues?|bugs?|failures?|gaps?|fixes?|trajectories|repos?|"
+    r"tickets?|defects?)\b",
+    # "Continuing on X" / "Will continue with Y" / "Moving on to Z" —
+    # declarative future-action that almost always precedes a stop.
+    r"\b(continuing\s+(on|with)|will\s+continue\s+with|i'?ll?\s+continue\s+"
+    r"(on|with)|moving\s+on\s+to|onto\s+the\s+next|switching\s+to\s+the\s+next)\b",
+    # "Next: <verb>" — explicit colon-as-label deferral. Catches
+    # "Next: apply the X pattern to Y" and friends. Verb list aligned with
+    # describe-but-don't-do above.
+    r"\bnext\s*:\s*(apply|run|do|fix|build|implement|wire|hook|add|change|"
+    r"test|ship|deploy|migrate|refactor|rewrite|tackle|address|finish|"
+    r"complete|land|handle|investigate|diagnose|trace|inspect|continue)\b",
+    # "Goal: drive X to pass" + bullet list later — recap-style intro.
+    # Matches the literal `※ recap:` and similar markers + "Progress
+    # summary" headers that almost always precede a stop.
+    r"^[\s>*\-•※]*\s*(recap|progress\s+summary|status\s+(update|report|so\s+far)|"
+    r"current\s+state|state\s+of\s+(things|the\s+world|play))\s*[:\(]",
+    # "Continuing on X." at end of turn — short-sentence deflection, often
+    # the last thing before the agent stops.
+    r"\b(continuing|continue|moving|moving\s+on|onto|on\s+to)\s+"
+    r"(on\s+)?\w+(_\w+)?(\s*(/|,)\s*\w+(_\w+)?)*\s*\.?\s*$",
+    # "1 task open" / "3 tests still failing" — declarative count of
+    # unfinished work, used as a status-report sign-off.
+    r"\b\d+\s+(task|item|issue|bug|problem|change|file|test|fix|trajectory|"
+    r"trajectories|repo|repos)s?\s+(open|outstanding|remaining|left|to\s+go|"
+    r"still\s+(open|failing|outstanding|pending))\b",
 ]
 
 COMPILED = [re.compile(p, flags=re.IGNORECASE | re.MULTILINE)
