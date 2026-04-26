@@ -3,6 +3,10 @@
 # behavior and auto-append a generated rule to the appropriate target so
 # the same assistant behavior cannot recur.
 #
+# Drafts the rule by shelling out to `claude -p` (Claude Code CLI in
+# non-interactive print mode). No external API or router needed; uses
+# whatever auth the local Claude Code install already has.
+#
 # Targets (resolved via apply_auto_rule.py):
 #   check_stop_asking.py     -> append regex to STOP_PATTERNS list
 #   check_time_estimates.py  -> append regex to ESTIMATE_PATTERNS list
@@ -11,8 +15,7 @@
 #                                project CLAUDE.md
 #
 # Confidence threshold defaults to 0.6; override with FRUSTRATION_CONF_MIN.
-# All outcomes (applied / low confidence / no router / parse failure)
-# are logged to ~/.claude/auto_rules.log so you can audit and revert.
+# All outcomes are logged to ~/.claude/auto_rules.log.
 
 set -euo pipefail
 
@@ -40,27 +43,21 @@ fi
 LOG="$HOME/.claude/auto_rules.log"
 mkdir -p "$(dirname "$LOG")"
 
-ROUTER="${MODEL_ROUTER_URL:-}"
-if [[ -z "$ROUTER" ]]; then
-    echo "$(date '+%F %T') | NO_ROUTER prompt=${PROMPT:0:200}" >> "$LOG"
+if ! command -v claude >/dev/null 2>&1; then
+    echo "$(date '+%F %T') | NO_CLAUDE_CLI prompt=${PROMPT:0:200}" >> "$LOG"
     exit 0
 fi
 
-SYSTEM_PROMPT='You translate user frustration into a hook rule. Respond ONLY with a JSON object: {"summary":str,"target":"check_stop_asking.py"|"check_time_estimates.py"|"CLAUDE.md","regex":str|null,"rule_text":str|null,"confidence":float}. Use a Python regex (no surrounding slashes) matching what the assistant said for Stop-hook patterns. Use rule_text for a one-line CLAUDE.md rule. Set confidence below 0.5 if the frustration is unrelated to assistant behavior.'
+DRAFT_PROMPT="You translate user frustration into a hook rule for the autohook-coding-agent-superpowers config. Respond ONLY with a JSON object on a single line, no prose, no markdown fence: {\"summary\":str,\"target\":\"check_stop_asking.py\"|\"check_time_estimates.py\"|\"CLAUDE.md\",\"regex\":str|null,\"rule_text\":str|null,\"confidence\":float}. Use a Python regex (no surrounding slashes) matching what the assistant said for Stop-hook patterns. Use rule_text for a one-line CLAUDE.md rule. Set confidence below 0.5 if the user's frustration is unrelated to assistant behavior (cursing at a build error, etc).
 
-REQ=$(jq -nc \
-    --arg sys "$SYSTEM_PROMPT" \
-    --arg user "$PROMPT" \
-    --arg asst "$LAST_ASSISTANT" \
-    '{model:"claude-sonnet-4-6",max_tokens:400,messages:[{role:"system",content:$sys},{role:"user",content:("USER (frustrated): "+$user+"\n\nPRIOR ASSISTANT TURN: "+$asst)}]}')
+USER (frustrated): $PROMPT
 
-DRAFT=$(curl -sS "$ROUTER/v1/chat/completions" \
-    -H 'Content-Type: application/json' \
-    -d "$REQ" 2>/dev/null \
-    | jq -r '.choices[0].message.content // empty' 2>/dev/null || true)
+PRIOR ASSISTANT TURN: $LAST_ASSISTANT"
+
+DRAFT=$(claude -p "$DRAFT_PROMPT" 2>/dev/null || true)
 
 if [[ -z "$DRAFT" ]]; then
-    echo "$(date '+%F %T') | ROUTER_NO_OUTPUT" >> "$LOG"
+    echo "$(date '+%F %T') | CLAUDE_NO_OUTPUT" >> "$LOG"
     exit 0
 fi
 

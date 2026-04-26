@@ -41,17 +41,18 @@ echo ""
 # 1. Prerequisites
 echo "1. Checking prerequisites"
 MISSING=()
-for cmd in jq curl python3 awk sed; do
+for cmd in claude jq python3 awk sed; do
     if ! command -v "$cmd" >/dev/null 2>&1; then
         MISSING+=("$cmd")
     fi
 done
 if [[ ${#MISSING[@]} -gt 0 ]]; then
     err "Missing required commands: ${MISSING[*]}"
-    err "Install them via Homebrew (macOS) or apt (Linux) and re-run."
+    err "claude is the Claude Code CLI; install it from https://claude.com/claude-code first."
+    err "The rest are standard CLI tools (Homebrew on macOS, apt on Linux)."
     exit 1
 fi
-ok "jq, curl, python3, awk, sed all present"
+ok "claude, jq, python3, awk, sed all present"
 echo ""
 
 # 2. Directory layout
@@ -104,14 +105,35 @@ touch "$CLAUDE_DIR/auto_rules.log"
 ok "auto_rules.log ready"
 echo ""
 
-# 6. Done
-echo "6. Done. $HOOKS_INSTALLED hook scripts installed."
+# 6. Global git commit-msg hook
+echo "6. Installing global git commit-msg hook"
+GIT_HOOKS_DIR="$CLAUDE_DIR/git-hooks"
+mkdir -p "$GIT_HOOKS_DIR"
+cp "$REPO_ROOT/git-hooks/commit-msg" "$GIT_HOOKS_DIR/commit-msg"
+chmod +x "$GIT_HOOKS_DIR/commit-msg"
+ok "commit-msg installed to $GIT_HOOKS_DIR/"
+
+CURRENT_HP=$(git config --global --get core.hooksPath || true)
+if [[ -z "$CURRENT_HP" ]]; then
+    git config --global core.hooksPath "$GIT_HOOKS_DIR"
+    ok "git config --global core.hooksPath -> $GIT_HOOKS_DIR"
+elif [[ "$CURRENT_HP" == "$GIT_HOOKS_DIR" ]]; then
+    ok "core.hooksPath already pointing at $GIT_HOOKS_DIR"
+else
+    warn "core.hooksPath already set to: $CURRENT_HP"
+    warn "leaving it alone. Either repoint it manually with"
+    warn "    git config --global core.hooksPath $GIT_HOOKS_DIR"
+    warn "or copy commit-msg into $CURRENT_HP/ yourself."
+fi
+echo ""
+
+# 7. Done
+echo "7. Done. $HOOKS_INSTALLED hook scripts installed."
 echo ""
 echo "Next steps:"
-echo "  - Set MODEL_ROUTER_URL in your shell so detect_frustration.sh can"
-echo "    draft auto-rules. The endpoint must be OpenAI-compatible:"
-echo ""
-echo "      export MODEL_ROUTER_URL=https://your-router/v1"
+echo "  - detect_frustration.sh shells out to 'claude -p' to draft rules,"
+echo "    so it uses the same auth and subscription you already have."
+echo "    Nothing else to wire up."
 echo ""
 echo "  - Drop examples/CLAUDE.md.template into a project root, replace the"
 echo "    <YOUR_*> placeholders, and rename it CLAUDE.md."

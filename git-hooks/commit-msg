@@ -1,0 +1,21 @@
+#!/bin/bash
+# Strip "Co-Authored-By: Claude ..." trailers from commit messages.
+# Installed by autohook-coding-agent-superpowers' install.sh into the
+# directory that core.hooksPath (global) points at, so it runs on
+# every commit in every repo on the machine.
+#
+# Why: Claude Code's default commit template adds a Co-Authored-By
+# trailer attributing Claude. GitHub resolves that trailer to the
+# @claude account and lists it in the repo's Contributors panel.
+# This hook deletes the trailer before git records the commit, so the
+# contributors panel only ever shows the human author.
+
+set -euo pipefail
+
+MSG_FILE="$1"
+
+# sed -i.bak is portable across BSD sed (macOS) and GNU sed (Linux).
+sed -i.bak -E '/^Co-Authored-By:[[:space:]].*(Claude|claude|@anthropic\.com)/d' "$MSG_FILE"
+rm -f "${MSG_FILE}.bak"
+
+exit 0
