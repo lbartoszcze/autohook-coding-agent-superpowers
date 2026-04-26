@@ -17,6 +17,7 @@ project's shared modules) and will need adjustment before they make sense in you
 │   ├── pre_write_edit.sh             # PreToolUse:Write|Edit — file-size cap, justifications, etc.
 │   ├── check_email_infra.sh          # PreToolUse:Write|Edit — gate alt-provider workaround code
 │   ├── diagnose_email.sh             # Companion: MX/SPF/DKIM/DMARC + Resend domain status
+│   ├── detect_frustration.sh         # UserPromptSubmit — stage proposed rules from frustrated prompts
 │   ├── check_stop_asking.py          # Stop hook — block "should I continue?" turns
 │   └── check_time_estimates.py       # Stop hook — block duration estimates
 └── examples/
@@ -49,6 +50,16 @@ project's shared modules) and will need adjustment before they make sense in you
 Block writing alt-provider signup helpers until you've actually diagnosed the domain's
 infrastructure (MX, SPF, DKIM, DMARC, Resend domain status, recent inbound). Pattern: diagnose
 *before* you build a workaround. The marker file `~/.claude/.email_infra_checked` is the bypass.
+
+### `detect_frustration.sh` (UserPromptSubmit)
+
+Watches user prompts for frustration / correction signals (`stop`, `ugh`, `i told you`, `that's not what i asked`, `why did you`, profanity targeting behavior, etc.). When it fires it grabs the prior assistant turn from the session transcript and appends a proposal block to `~/.claude/proposed_rules.md`. If `MODEL_ROUTER_URL` is set, it asks the router to draft a candidate regex or `CLAUDE.md` rule, classified by target file and tagged with a confidence score.
+
+The hook does **not** block the prompt and does **not** auto-modify live hooks or settings. The proposal file is for human review — copy useful rules into `check_stop_asking.py`, `check_time_estimates.py`, or your `CLAUDE.md` by hand.
+
+This avoids the obvious failure mode where an LLM-drafted regex lands directly in a live Stop hook, blocks something legitimate, produces more frustration, and stacks another bad auto-rule on top. The review file breaks that loop.
+
+`MODEL_ROUTER_URL` is expected to expose an OpenAI-compatible `/v1/chat/completions` endpoint. If it's unset or unreachable, the hook still records the raw frustration signal (user message + prior assistant turn) so you can refine the rule by hand.
 
 ### `check_stop_asking.py` (Stop hook)
 
