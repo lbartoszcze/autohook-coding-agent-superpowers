@@ -1,4 +1,4 @@
-# claude-code-config
+# autohook-coding-agent-superpowers
 
 My personal [Claude Code](https://claude.com/claude-code) hooks, settings, and a sanitized
 project-level `CLAUDE.md` template. Sharing them in case the patterns are useful.
@@ -114,8 +114,8 @@ why this file needs to exist, it probably doesn't.
 One-liner:
 
 ```bash
-git clone https://github.com/lbartoszcze/claude-code-config && \
-  cd claude-code-config && \
+git clone https://github.com/lbartoszcze/autohook-coding-agent-superpowers && \
+  cd autohook-coding-agent-superpowers && \
   ./install.sh
 ```
 
