@@ -161,6 +161,8 @@ STOP_PATTERNS = [
     r"\b\d+\s+(task|item|issue|bug|problem|change|file|test|fix|trajectory|"
     r"trajectories|repo|repos)s?\s+(open|outstanding|remaining|left|to\s+go|"
     r"still\s+(open|failing|outstanding|pending))\b",
+    # auto-added 2026-04-26T16:18:09: Assistant lists architecture as a table and ends turn instead of executing the obvious next step
+    r"""What's now live:""",
 ]
 
 COMPILED = [re.compile(p, flags=re.IGNORECASE | re.MULTILINE)

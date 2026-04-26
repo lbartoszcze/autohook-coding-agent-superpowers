@@ -34,9 +34,10 @@ CWD=$(echo "$INPUT" | jq -r '.cwd // empty')
 
 if [[ -z "$PROMPT" ]]; then exit 0; fi
 
-FRUSTRATION='\b(stop\s+(doing|using|saying|writing|asking|making|with)|don.?t\s+(do|ever|use|say|write|ask|tell)|never\s+(do|use|say|write|again)|i\s+(hate|dislike|don.?t\s+want|told\s+you|already\s+told)|ugh|wtf|jesus\s+christ|for\s+the\s+love|come\s+on|cmon|how\s+many\s+times|annoying|frustrat\w*|infuriat\w*|the\s+fuck|fucking\s|bullshit|why\s+(are|did|would|do)\s+you|that.?s\s+not\s+what|i\s+didn.?t\s+ask|not\s+what\s+i\s+(asked|wanted)|stop\s+asking|hate\s+(when|that|it|how))\b'
-
-if ! echo "$PROMPT" | grep -qiE "$FRUSTRATION"; then
+# Length floor — skip trivially short prompts to avoid LLM call on
+# "ok" / "thanks" / single-word continuations.
+PROMPT_LEN=${#PROMPT}
+if [[ $PROMPT_LEN -lt 20 ]]; then
     exit 0
 fi
 
@@ -63,6 +64,25 @@ fi
 (
     export DETECT_FRUSTRATION_ACTIVE=1
 
+    # Step 1: classify whether the user is actually frustrated /
+    # correcting the assistant. Replaces the old regex pre-filter.
+    CLASSIFY_PROMPT="Decide whether the user message below is expressing frustration with or correction of the assistant's recent behavior. Examples of YES: telling the assistant to stop doing something, complaining about a previous response, profanity directed at the assistant, 'I told you', 'why did you', 'that's not what I asked'. Examples of NO: a normal task request, a calm question, satisfaction, cursing at unrelated infrastructure, casual filler.
+
+USER MESSAGE: $PROMPT
+
+Reply with exactly one of these and nothing else:
+YES
+or
+NO"
+
+    VERDICT=$(claude -p "$CLASSIFY_PROMPT" 2>/dev/null | head -1 | tr -d '[:space:]' || true)
+
+    if [[ "$VERDICT" != "YES" ]]; then
+        echo "$(date '+%F %T') | NOT_FRUSTRATED verdict=${VERDICT:-empty}" >> "$LOG"
+        exit 0
+    fi
+
+    # Step 2: draft the actual rule.
     DRAFT_PROMPT="You translate user frustration into a hook rule for the autohook-coding-agent-superpowers config. Respond ONLY with a JSON object on a single line, no prose, no markdown fence: {\"summary\":str,\"target\":\"check_stop_asking.py\"|\"check_time_estimates.py\"|\"CLAUDE.md\",\"regex\":str|null,\"rule_text\":str|null,\"confidence\":float}. Use a Python regex (no surrounding slashes) matching what the assistant said for Stop-hook patterns. Use rule_text for a one-line CLAUDE.md rule. Set confidence below 0.5 if the user's frustration is unrelated to assistant behavior (cursing at a build error, etc).
 
 USER (frustrated): $PROMPT

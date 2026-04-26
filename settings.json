@@ -75,11 +75,11 @@
           },
           {
             "type": "command",
-            "command": "python3 $HOME/.claude/hooks/check_stop_asking.py"
+            "command": "python3 $HOME/.claude/hooks/check_open_items_with_model.py"
           },
           {
             "type": "command",
-            "command": "python3 $HOME/.claude/hooks/check_open_items_with_model.py"
+            "command": "python3 $HOME/.claude/hooks/check_substantiation_with_model.py"
           }
         ]
       }
