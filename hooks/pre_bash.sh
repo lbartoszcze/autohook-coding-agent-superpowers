@@ -71,6 +71,19 @@ if echo "$CMD" | grep -qE 'ANTHROPIC_API_KEY|@anthropic-ai/sdk|api\.anthropic\.c
     exit 2
 fi
 
+# === Block Claude/Anthropic Co-Authored-By trailer in git commits ===
+# Catches Claude's default commit template at the source: any
+# `git commit` invocation whose message contains a Co-Authored-By
+# line attributing Claude or noreply@anthropic.com is rejected.
+# Drop the trailer from the message and retry.
+if echo "$CMD" | grep -qE '(^|[;&|] *)git\s+commit\b'; then
+    if echo "$CMD" | grep -qiE 'Co-Authored-By:[[:space:]].*(Claude|@anthropic\.com)'; then
+        echo "BLOCKED: git commit message contains a Co-Authored-By trailer attributing Claude/Anthropic." >&2
+        echo "Remove the trailer from the commit message and retry." >&2
+        exit 2
+    fi
+fi
+
 # === Wisent CLI override flags ===
 if echo "$CMD" | grep -qE '(^|\s)wisent\s'; then
     FORBIDDEN_FLAGS="--limit|--max-pairs|--max-samples|--num-samples|--batch-size|--max-iterations|--n-pairs|--sample-size|--subset|--quick|--fast|--test-mode|--debug-limit"
