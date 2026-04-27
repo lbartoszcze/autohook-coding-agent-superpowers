@@ -34,10 +34,23 @@ CWD=$(echo "$INPUT" | jq -r '.cwd // empty')
 
 if [[ -z "$PROMPT" ]]; then exit 0; fi
 
-# Length floor — skip trivially short prompts to avoid LLM call on
-# "ok" / "thanks" / single-word continuations.
-PROMPT_LEN=${#PROMPT}
-if [[ $PROMPT_LEN -lt 20 ]]; then
+# Two-stage filter:
+#   Stage 1 (this regex): cheap microsecond pre-filter, high recall.
+#                         If the prompt has no plausibly-frustration
+#                         signal at all, exit 0 with no LLM call.
+#                         Most prompts (calm task requests, questions,
+#                         confirmations) skip the model entirely.
+#   Stage 2 (claude -p):  authoritative YES/NO classification on the
+#                         prompts the regex flagged. Catches paraphrases
+#                         and rejects false-positives the regex caught.
+#
+# Why both: a model-only design pays an LLM call on every prompt --
+# overwhelmingly wasted, since most prompts aren't frustrated. A regex-
+# only design misses paraphrased frustration. The pair gives near-zero
+# cost on the common path AND the model's judgment on the borderline.
+FRUSTRATION='\b(stop\s+(doing|using|saying|writing|asking|making|with)|don.?t\s+(do|ever|use|say|write|ask|tell)|never\s+(do|use|say|write|again)|i\s+(hate|dislike|don.?t\s+want|told\s+you|already\s+told)|ugh|wtf|jesus\s+christ|for\s+the\s+love|come\s+on|cmon|how\s+many\s+times|annoying|frustrat\w*|infuriat\w*|the\s+fuck|fucking\s|bullshit|why\s+(are|did|would|do)\s+you|that.?s\s+not\s+what|i\s+didn.?t\s+ask|not\s+what\s+i\s+(asked|wanted)|stop\s+asking|hate\s+(when|that|it|how))\b'
+
+if ! echo "$PROMPT" | grep -qiE "$FRUSTRATION"; then
     exit 0
 fi
 
