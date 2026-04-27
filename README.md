@@ -20,3 +20,7 @@ git clone https://github.com/lbartoszcze/autohook-coding-agent-superpowers && \
 - creating dozens of useless files that duplicate existing functionalities — **GONE!**
 - writing files that are thousands of lines long that the model greps over — **GONE!**
 - not knowing your credentials — **GONE!**
+- hallucinating bs errors without actually testing it — **GONE!**
+- telling you something is "likely caused" by something — **GONE!**
+- executing one-off scripts — **GONE!**
+- not reading actual documentation of external libraries or services — **GONE!**
