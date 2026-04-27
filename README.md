@@ -24,3 +24,4 @@ git clone https://github.com/lbartoszcze/autohook-coding-agent-superpowers && \
 - telling you something is "likely caused" by something — **GONE!**
 - executing one-off scripts — **GONE!**
 - not reading actual documentation of external libraries or services — **GONE!**
+- Claude adding themselves as a coauthor to your commits — **GONE!**
