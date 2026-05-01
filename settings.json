@@ -16,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/.claude/hooks/pre_bash.sh"
+            "command": "$HOME/.shared-hooks/pre_bash.sh"
           }
         ]
       },
@@ -34,11 +34,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/.claude/hooks/pre_write_edit.sh"
+            "command": "$HOME/.shared-hooks/pre_write_edit.sh"
           },
           {
             "type": "command",
-            "command": "$HOME/.claude/hooks/check_email_infra.sh"
+            "command": "$HOME/.shared-hooks/check_email_infra.sh"
           }
         ]
       },
@@ -57,7 +57,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/.claude/hooks/detect_frustration.sh"
+            "command": "$HOME/.shared-hooks/detect_frustration.sh"
           }
         ]
       }
@@ -67,23 +67,23 @@
         "hooks": [
           {
             "type": "command",
-            "command": "INPUT=$(cat)\nSTOP_ACTIVE=$(echo \"$INPUT\" | jq -r '.stop_hook_active' 2>/dev/null)\nif [ \"$STOP_ACTIVE\" = \"true\" ]; then exit 0; fi\nMSG=$(echo \"$INPUT\" | jq -r '.last_assistant_message' 2>/dev/null)\nif echo \"$MSG\" | grep -qiE '\\bmanual(ly)?\\b|\\bby hand\\b|\\bsimplif(y|ied|ier)\\b|\\bsimpler approach\\b|\\blet me try a simpler\\b|\\bdo it yourself\\b|\\bcreate.*(account|it).*(yourself|by hand)\\b|\\beasier.*(just|to).*manual\\b'; then\n  echo '{\"decision\":\"block\",\"reason\":\"BLOCKED: You suggested a manual/simplified solution. Everything must be fully automated. No manual steps, no simplifying. Rethink and provide a fully automated solution.\"}'\n  exit 0\nfi\nif echo \"$MSG\" | grep -qiE '\\blikely\\b|\\bknown limitation\\b|\\bprobably\\b|\\bmaybe\\b|\\bmay be\\b|\\bmight be\\b|\\bcould be\\b|\\bpossibly\\b|\\bperhaps\\b|\\bi think\\b|\\bi suspect\\b|\\bmy guess\\b'; then\n  echo '{\"decision\":\"block\",\"reason\":\"BLOCKED: Do not speculate. You used a weasel word (likely, probably, might, etc). Investigate the actual code/data and state what IS happening, not what might be.\"}'\n  exit 0\nfi\nif echo \"$MSG\" | grep -qiE '\\bcool[- ]?down\\b|\\bcools? (off|down)\\b|\\bcooling (off|down)\\b|\\bfresh eyes\\b|\\brested brain\\b|\\bneed (a |some )?rest\\b|\\bsleep on (it|this)\\b|\\btry (again )?(tomorrow|later)\\b|\\bcome back (tomorrow|later|in (a|the) morning)\\b|\\bwait (it )?out\\b|\\bpool (is|was|gets|got) burn(t|ed)\\b|\\bburnt (pool|ip)\\b|\\bips? (will |should |might )?(cool|age|decay|reset|clear|unburn)\\b|\\brate[- ]?limit.*\\b(will|should|might|may) (reset|clear|expire|decay)\\b|\\btake a break\\b|\\bcall it a day\\b|\\bpick (this|it) up tomorrow\\b'; then\n  echo '{\"decision\":\"block\",\"reason\":\"BLOCKED: Do not suggest waiting, cooling off, retrying later, taking a break, or claim that IPs/pools/rate-limits will reset or cool down. If a flow fails, diagnose with evidence or say \\\"I do not know\\\". Never invent recovery mechanisms without reverse-engineering data.\"}'\n  exit 0\nfi\nexit 0"
+            "command": "python3 $HOME/.shared-hooks/check_speculation.py"
           },
           {
             "type": "command",
-            "command": "python3 $HOME/.claude/hooks/check_time_estimates.py"
+            "command": "python3 $HOME/.shared-hooks/check_time_estimates.py"
           },
           {
             "type": "command",
-            "command": "python3 $HOME/.claude/hooks/check_stop_asking.py"
+            "command": "python3 $HOME/.shared-hooks/check_stop_asking.py"
           },
           {
             "type": "command",
-            "command": "python3 $HOME/.claude/hooks/check_open_items_with_model.py"
+            "command": "python3 $HOME/.shared-hooks/check_open_items_with_model.py"
           },
           {
             "type": "command",
-            "command": "python3 $HOME/.claude/hooks/check_substantiation_with_model.py"
+            "command": "python3 $HOME/.shared-hooks/check_substantiation_with_model.py"
           }
         ]
       }

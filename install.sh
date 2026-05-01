@@ -1,27 +1,29 @@
 #!/bin/bash
-# One-shot installer for claude-code-config.
+# Cross-agent installer for autohook-coding-agent-superpowers.
 #
 # Run from the repo root:
 #     ./install.sh
 #
 # What it does:
-#   1. Verifies jq, curl, python3, awk, sed are on $PATH
-#   2. Creates ~/.claude/hooks/
-#   3. Backs up any existing ~/.claude/settings.json to .bak.<timestamp>
-#   4. Copies settings.json + hooks/* into ~/.claude/
-#   5. chmod +x the hook scripts
-#   6. Seeds ~/.claude/file_justifications.json (empty {}) if missing
-#   7. Touches ~/.claude/auto_rules.log if missing
+#   1. Verifies jq, python3, awk, sed are on $PATH
+#   2. Creates ~/.shared-hooks/ (shared across agents)
+#   3. Copies all hook scripts into ~/.shared-hooks/
+#   4. Wires Claude Code (~/.claude/settings.json)
+#   5. Wires Droid (~/.factory/settings.json)
+#   6. Wires Codex (~/.codex/hooks.json)
+#   7. Installs global git commit-msg hook
+#   8. Seeds helper files
 #
-# Idempotent: re-running overwrites hook files in place. The previous
-# settings.json is preserved as a timestamped backup so you can diff
-# and merge any local changes you had made.
+# Idempotent: re-running overwrites hook files in place.
+# Settings files are backed up before modification.
 
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SHARED_HOOKS="$HOME/.shared-hooks"
 CLAUDE_DIR="$HOME/.claude"
-HOOKS_DIR="$CLAUDE_DIR/hooks"
+FACTORY_DIR="$HOME/.factory"
+CODEX_DIR="$HOME/.codex"
 
 red()   { printf '\033[31m%s\033[0m' "$1"; }
 green() { printf '\033[32m%s\033[0m' "$1"; }
@@ -31,82 +33,212 @@ ok()   { printf '  %s %s\n' "$(green '[ok]')"   "$1"; }
 warn() { printf '  %s %s\n' "$(yel '[warn]')"   "$1"; }
 err()  { printf '  %s %s\n' "$(red '[err]')"    "$1" >&2; }
 
-echo "claude-code-config installer"
-echo "============================"
+echo "autohook-coding-agent-superpowers installer (cross-agent)"
+echo "========================================================="
 echo ""
 echo "  Source: $REPO_ROOT"
-echo "  Target: $CLAUDE_DIR"
+echo "  Shared hooks: $SHARED_HOOKS"
 echo ""
 
 # 1. Prerequisites
 echo "1. Checking prerequisites"
 MISSING=()
-for cmd in claude jq python3 awk sed; do
+for cmd in jq python3 awk sed; do
     if ! command -v "$cmd" >/dev/null 2>&1; then
         MISSING+=("$cmd")
     fi
 done
 if [[ ${#MISSING[@]} -gt 0 ]]; then
     err "Missing required commands: ${MISSING[*]}"
-    err "claude is the Claude Code CLI; install it from https://claude.com/claude-code first."
-    err "The rest are standard CLI tools (Homebrew on macOS, apt on Linux)."
+    err "Standard CLI tools (Homebrew on macOS, apt on Linux)."
     exit 1
 fi
-ok "claude, jq, python3, awk, sed all present"
+ok "jq, python3, awk, sed all present"
+
+# Check at least one agent is installed
+AGENTS_FOUND=0
+for cmd in claude droid codex; do
+    if command -v "$cmd" >/dev/null 2>&1; then
+        ok "$cmd CLI found"
+        AGENTS_FOUND=$((AGENTS_FOUND + 1))
+    fi
+done
+if [[ "$AGENTS_FOUND" -eq 0 ]]; then
+    warn "No agent CLIs found (claude, droid, codex). Hooks will be installed but won't fire until an agent is installed."
+fi
 echo ""
 
 # 2. Directory layout
-echo "2. Creating ~/.claude directories"
-mkdir -p "$HOOKS_DIR"
-ok "$HOOKS_DIR ready"
+echo "2. Creating shared hooks directory"
+mkdir -p "$SHARED_HOOKS"
+ok "$SHARED_HOOKS ready"
 echo ""
 
-# 3. settings.json
-echo "3. Installing settings.json"
-TS=$(date '+%Y%m%d-%H%M%S')
-if [[ -f "$CLAUDE_DIR/settings.json" ]]; then
-    BACKUP="$CLAUDE_DIR/settings.json.bak.$TS"
-    cp "$CLAUDE_DIR/settings.json" "$BACKUP"
-    warn "existing settings.json backed up to:"
-    warn "    $BACKUP"
-fi
-cp "$REPO_ROOT/settings.json" "$CLAUDE_DIR/settings.json"
-ok "settings.json installed"
-warn "open it and replace <YOUR_*> placeholders, or remove the mcpServers block"
-echo ""
-
-# 4. Hooks
-echo "4. Installing hooks"
+# 3. Install hook scripts to shared location
+echo "3. Installing hook scripts to $SHARED_HOOKS"
 HOOKS_INSTALLED=0
 for f in "$REPO_ROOT/hooks"/*.sh "$REPO_ROOT/hooks"/*.py; do
     if [[ -f "$f" ]]; then
         name=$(basename "$f")
-        cp "$f" "$HOOKS_DIR/$name"
-        chmod +x "$HOOKS_DIR/$name"
+        cp "$f" "$SHARED_HOOKS/$name"
+        chmod +x "$SHARED_HOOKS/$name"
         ok "$name"
         HOOKS_INSTALLED=$((HOOKS_INSTALLED + 1))
     fi
 done
+# Also install the new check_speculation.py if it exists in shared-hooks already
+if [[ -f "$SHARED_HOOKS/check_speculation.py" ]]; then
+    ok "check_speculation.py (already in shared-hooks)"
+fi
 if [[ "$HOOKS_INSTALLED" -eq 0 ]]; then
     err "No hooks found in $REPO_ROOT/hooks/. Did you run from the repo root?"
     exit 1
 fi
 echo ""
 
-# 5. Helper files
-echo "5. Seeding helper files"
-if [[ ! -f "$CLAUDE_DIR/file_justifications.json" ]]; then
-    echo '{}' > "$CLAUDE_DIR/file_justifications.json"
+# 4. Wire Claude Code
+echo "4. Wiring Claude Code (~/.claude/)"
+mkdir -p "$CLAUDE_DIR"
+TS=$(date '+%Y%m%d-%H%M%S')
+if [[ -f "$CLAUDE_DIR/settings.json" ]]; then
+    cp "$CLAUDE_DIR/settings.json" "$CLAUDE_DIR/settings.json.bak.$TS"
+    warn "backed up existing settings.json"
+fi
+cp "$REPO_ROOT/settings.json" "$CLAUDE_DIR/settings.json"
+ok "Claude Code settings.json installed"
+warn "Replace <YOUR_*> placeholders in mcpServers, or remove the block"
+echo ""
+
+# 5. Wire Droid (Factory)
+echo "5. Wiring Droid (~/.factory/)"
+mkdir -p "$FACTORY_DIR"
+if [[ -f "$FACTORY_DIR/settings.json" ]]; then
+    cp "$FACTORY_DIR/settings.json" "$FACTORY_DIR/settings.json.bak.$TS"
+    warn "backed up existing settings.json"
+fi
+# Generate Droid hooks config
+DROID_HOOKS_JSON=$(cat <<'DROID_EOF'
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Execute",
+        "hooks": [
+          {"type": "command", "command": "SHARED/pre_bash.sh"}
+        ]
+      },
+      {
+        "matcher": "Edit|Create",
+        "hooks": [
+          {"type": "command", "command": "SHARED/pre_write_edit.sh"}
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {"type": "command", "command": "SHARED/detect_frustration.sh"}
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {"type": "command", "command": "python3 SHARED/check_speculation.py"},
+          {"type": "command", "command": "python3 SHARED/check_time_estimates.py"},
+          {"type": "command", "command": "python3 SHARED/check_stop_asking.py"},
+          {"type": "command", "command": "python3 SHARED/check_open_items_with_model.py"},
+          {"type": "command", "command": "python3 SHARED/check_substantiation_with_model.py"}
+        ]
+      }
+    ]
+  }
+}
+DROID_EOF
+)
+# Replace SHARED/ with actual path
+DROID_HOOKS_JSON=$(echo "$DROID_HOOKS_JSON" | sed "s|SHARED/|$SHARED_HOOKS/|g")
+
+if [[ -f "$FACTORY_DIR/settings.json" ]]; then
+    # Merge hooks into existing settings using jq
+    jq --argjson hooks "$DROID_HOOKS_JSON" '.hooks = $hooks.hooks' "$FACTORY_DIR/settings.json" > "$FACTORY_DIR/settings.json.tmp" 2>/dev/null && \
+        mv "$FACTORY_DIR/settings.json.tmp" "$FACTORY_DIR/settings.json" && \
+        ok "Droid hooks merged into existing settings.json" || {
+        warn "Could not merge with jq; writing standalone hooks config"
+        echo "$DROID_HOOKS_JSON" > "$FACTORY_DIR/settings.json"
+        ok "Droid settings.json written (standalone)"
+    }
+else
+    echo "$DROID_HOOKS_JSON" > "$FACTORY_DIR/settings.json"
+    ok "Droid settings.json created"
+fi
+echo ""
+
+# 6. Wire Codex
+echo "6. Wiring Codex (~/.codex/)"
+mkdir -p "$CODEX_DIR"
+if [[ -f "$CODEX_DIR/hooks.json" ]]; then
+    cp "$CODEX_DIR/hooks.json" "$CODEX_DIR/hooks.json.bak.$TS"
+    warn "backed up existing hooks.json"
+fi
+CODEX_HOOKS_JSON=$(cat <<'CODEX_EOF'
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {"type": "command", "command": "SHARED/pre_bash.sh", "statusMessage": "Checking Bash command"}
+        ]
+      },
+      {
+        "matcher": "apply_patch|Edit|Write",
+        "hooks": [
+          {"type": "command", "command": "SHARED/pre_write_edit.sh", "statusMessage": "Checking file edit"}
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {"type": "command", "command": "SHARED/detect_frustration.sh"}
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {"type": "command", "command": "python3 SHARED/check_speculation.py", "timeout": 10},
+          {"type": "command", "command": "python3 SHARED/check_time_estimates.py", "timeout": 10},
+          {"type": "command", "command": "python3 SHARED/check_stop_asking.py", "timeout": 10},
+          {"type": "command", "command": "python3 SHARED/check_open_items_with_model.py", "timeout": 30},
+          {"type": "command", "command": "python3 SHARED/check_substantiation_with_model.py", "timeout": 30}
+        ]
+      }
+    ]
+  }
+}
+CODEX_EOF
+)
+CODEX_HOOKS_JSON=$(echo "$CODEX_HOOKS_JSON" | sed "s|SHARED/|$SHARED_HOOKS/|g")
+echo "$CODEX_HOOKS_JSON" > "$CODEX_DIR/hooks.json"
+ok "Codex hooks.json installed"
+echo ""
+
+# 7. Helper files
+echo "7. Seeding helper files"
+if [[ ! -f "$SHARED_HOOKS/file_justifications.json" ]]; then
+    echo '{}' > "$SHARED_HOOKS/file_justifications.json"
     ok "file_justifications.json seeded with {}"
 else
     ok "file_justifications.json already present"
 fi
-touch "$CLAUDE_DIR/auto_rules.log"
+touch "$SHARED_HOOKS/auto_rules.log"
 ok "auto_rules.log ready"
 echo ""
 
-# 6. Global git commit-msg hook
-echo "6. Installing global git commit-msg hook"
+# 8. Global git commit-msg hook
+echo "8. Installing global git commit-msg hook"
 GIT_HOOKS_DIR="$CLAUDE_DIR/git-hooks"
 mkdir -p "$GIT_HOOKS_DIR"
 cp "$REPO_ROOT/git-hooks/commit-msg" "$GIT_HOOKS_DIR/commit-msg"
@@ -127,19 +259,18 @@ else
 fi
 echo ""
 
-# 7. Done
-echo "7. Done. $HOOKS_INSTALLED hook scripts installed."
+# 9. Done
+echo "9. Done. $HOOKS_INSTALLED hook scripts installed to $SHARED_HOOKS"
+echo ""
+echo "All three agents now share the same behavioral hooks:"
+echo "  Claude Code  -> ~/.claude/settings.json   (references $SHARED_HOOKS/)"
+echo "  Droid        -> ~/.factory/settings.json  (references $SHARED_HOOKS/)"
+echo "  Codex        -> ~/.codex/hooks.json        (references $SHARED_HOOKS/)"
 echo ""
 echo "Next steps:"
-echo "  - detect_frustration.sh shells out to 'claude -p' to draft rules,"
-echo "    so it uses the same auth and subscription you already have."
-echo "    Nothing else to wire up."
-echo ""
-echo "  - Drop examples/CLAUDE.md.template into a project root, replace the"
-echo "    <YOUR_*> placeholders, and rename it CLAUDE.md."
-echo ""
-echo "  - Review ~/.claude/settings.json. The mcpServers block has placeholder"
-echo "    keys; fill them in or remove the block."
+echo "  - Replace <YOUR_*> placeholders in ~/.claude/settings.json mcpServers"
+echo "  - detect_frustration.sh shells out to 'claude -p' for model-gated hooks"
+echo "  - Edit a hook in $SHARED_HOOKS/ and all agents pick it up immediately"
 echo ""
 echo "Audit auto-applied rules with:"
-echo "  cat ~/.claude/auto_rules.log"
+echo "  cat $SHARED_HOOKS/auto_rules.log"

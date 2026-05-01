@@ -163,6 +163,8 @@ STOP_PATTERNS = [
     r"still\s+(open|failing|outstanding|pending))\b",
     # auto-added 2026-04-26T16:18:09: Assistant lists architecture as a table and ends turn instead of executing the obvious next step
     r"""What's now live:""",
+    # auto-added 2026-04-28T23:36:12: Assistant kept referencing Linq despite user's standing rule that iMessage integration is via wisent-ultrareach, not Linq
+    r"""\b[Ll]inq\b|LINQ_API_URL|LINQ_""",
 ]
 
 COMPILED = [re.compile(p, flags=re.IGNORECASE | re.MULTILINE)
